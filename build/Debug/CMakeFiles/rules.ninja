@@ -84,7 +84,7 @@ rule C_COMPILER__FreeRTOS_unscanned_Debug
 # Rule for re-running cmake.
 
 rule RERUN_CMAKE
-  command = C:\Users\PoXia\AppData\Local\stm32cube\bundles\cmake\4.3.1+st.1\bin\cmake.exe --regenerate-during-build -SC:\Users\PoXia\Desktop\RM\测试工程\20.standard_robot_vscode -BC:\Users\PoXia\Desktop\RM\测试工程\20.standard_robot_vscode\build\Debug
+  command = C:\Users\PoXia\AppData\Local\stm32cube\bundles\cmake\4.3.1+st.1\bin\cmake.exe --regenerate-during-build -SC:\Users\PoXia\Desktop\RM\测试工程\gimbal_20.standard_robot_vscode -BC:\Users\PoXia\Desktop\RM\测试工程\gimbal_20.standard_robot_vscode\build\Debug
   description = Re-running CMake...
   generator = 1
 
