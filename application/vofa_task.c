@@ -37,7 +37,6 @@ extern DMA_HandleTypeDef hdma_usart1_rx;
 
 #include "gimbal_task.h"        // get_yaw_motor_point / get_pitch_motor_point / gimbal_PID_t
 #include "pid.h"                // pid_type_def
-#include "remote_control.h"     // get_remote_control_point / RC_ctrl_t
 #include "shoot.h"              // shoot_control_t / fric_motor_t
 
 //射击数据全局实例(shoot.c 定义, 非 static), 调试模式直接绑定摩擦轮速度环
@@ -89,10 +88,6 @@ static uint8_t vofa_tx_echo_buf[VOFA_ECHO_BUF_SIZE];
 //命令行缓冲(任务上下文独占, 无需保护)
 static char    vofa_cmd_buf[VOFA_CMD_LEN_MAX];
 static uint8_t vofa_cmd_len = 0;
-
-//遥控器通道 fp32 镜像 (RC 结构体是整型, 注册表只认 float*)
-//顺序: ch0..ch4, s0, s1, mouse_x, mouse_y, key_v (共10个)
-static fp32 vofa_rc_mirror[10];
 
 //---------------------------- 工具: fp32 -> 字符串 ----------------------------
 //newlib-nano 默认 printf 不支持 %f/%g(需 -u _printf_float), 手写转换避免链接依赖
@@ -471,25 +466,6 @@ static void vofa_bind(void)
     ---- 遥控器通道注册结束 ---- */
 }
 
-//遥控器整型 -> fp32 镜像刷新
-static void vofa_rc_mirror_update(void)
-{
-    const RC_ctrl_t *rc = get_remote_control_point();
-    if (rc == NULL)
-    {
-        return;
-    }
-    for (uint8_t i = 0; i < 5u; i++)
-    {
-        vofa_rc_mirror[i] = (fp32)rc->rc.ch[i];
-    }
-    vofa_rc_mirror[5] = (fp32)rc->rc.s[0];
-    vofa_rc_mirror[6] = (fp32)rc->rc.s[1];
-    vofa_rc_mirror[7] = (fp32)rc->mouse.x;
-    vofa_rc_mirror[8] = (fp32)rc->mouse.y;
-    vofa_rc_mirror[9] = (fp32)rc->key.v;
-}
-
 //---------------------------- 任务入口 ----------------------------
 void vofa_task(void const *argument)
 {
@@ -513,10 +489,7 @@ void vofa_task(void const *argument)
             vofa_rx_byte(b);
         }
 
-        //4. 遥控器镜像刷新(通道未注册, 仅刷新 vofa_rc_mirror 数组供调试器观察)
-        vofa_rc_mirror_update();
-
-        //5. 波形发送
+        //4. 波形发送
         vofa_send_wave();
 
         osDelay(1000u / VOFA_SEND_HZ);

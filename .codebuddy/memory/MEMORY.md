@@ -1,5 +1,8 @@
 # gimbal_20.standard_robot_vscode 长期记忆
 
+## 工程文档
+- 根目录 README.md 已重写（2026-10-05），完整收录：电机 ID 分配表、串口分配、遥控操作映射、VOFA 调参指南（蓝牙连接/AT 配置/通道表/命令语法）、当前 PID 定稿值、宏开关一览（YAW_SLIP_RING/YAW_OFFSET_ECD/FRIC_POWERON_AUTO/SBUS_FORWARD_TO_USART1）、IMU 矩阵修正与校准流程。用户问工程配置/操作类问题时优先引导查阅 README。
+
 ## 构建环境（2026-10-04 更新，覆盖旧记录）
 - cmake：`C:/ST/STM32CubeCLT_1.18.0/CMake/bin/cmake.exe`（旧 CLion 路径已失效）；构建命令 `cmake --build --preset Debug`（**target SBV 已不存在**，目标名 standard_robot）。
 - arm-none-eabi-gcc：`C:/Users/PoXia/AppData/Local/stm32cube/bundles/gnu-tools-for-stm32/14.3.1+st.2/bin/`（stm32cube bundles 管理，cmake 自动找，无需手动指定）。
@@ -9,7 +12,7 @@
 - 模块 `application/vofa_task.c/h`，对外 API 仅 vofa_reg_param / vofa_reg_channel / vofa_reg_pid（VOFA_PID_STD=pid_type_def / VOFA_PID_GIMBAL=gimbal_PID_t）。
 - 传输 USART1 蓝牙 115200（大夏龙雀 DX-BT36/37 透传双模块 AT+BIND 配对，接外壳丝印 UART2 的 4-pin 座 = STM32 USART1 PA9/PB7）；RX DMA Circular+空闲中断（CubeMX 由用户配，代码只用 HAL_UARTEx_ReceiveToIdle_DMA + HAL_UARTEx_RxEventCallback，重生成不覆盖）；TX 复用 usart1_tx_dma_enable 忙检查丢帧。
 - 命令：`set <name> <val>` / `get <name>` / `list`（\n 结尾，VOFA 文本模式发，Hex 不勾，%%占位符配滑条），指针直写立即生效；浮点转串手写 vofa_ftoa（newlib-nano 无 %f）。
-- 当前绑定（用户"调哪个输出哪个"原则，按需增删）：**yaw 串级调参**——ch0 yaw_set / ch1 yaw_get / ch2 yaw_gyro_set(角度环输出=速度环目标) / ch3 yaw_gyro / ch4 yaw_out；参数 yaw_ang_kp/ki/kd/maxout/maxiout（角度环 gimbal_PID_t absolute_angle_pid，当前 26/0/0.3）+ yaw_spd_kp/ki/kd/maxout/maxiout（速度环 pid_type_def gyro_pid，当前 3600/20/0）。激励源=左摇杆水平 ch2；yaw 角度 ±π 环绕，ch0/ch1 在 ±3.14 跳变属正常。pitch 串级注册块注释保留（pitch 定稿 15/0/0 + 2900/60/0），fric0/遥控器通道同样注释保留。级联整定口诀：内环看 ch3 追 ch2（调 spd），外环看 ch1 追 ch0（调 ang）。
+- 当前绑定（用户"调哪个输出哪个"原则，按需增删）：**yaw 串级调参**——ch0 yaw_set / ch1 yaw_get / ch2 yaw_gyro_set(角度环输出=速度环目标) / ch3 yaw_gyro / ch4 yaw_out；参数 yaw_ang_kp/ki/kd/maxout/maxiout（角度环 gimbal_PID_t absolute_angle_pid，当前 26/0/0.3）+ yaw_spd_kp/ki/kd/maxout/maxiout（速度环 pid_type_def gyro_pid，当前 3600/20/0）。激励源=左摇杆水平 ch2；yaw 角度 ±π 环绕，ch0/ch1 在 ±3.14 跳变属正常。pitch 串级注册块注释保留（pitch 定稿 15/0/0 + 2900/60/0），fric0 注册块注释保留。**vofa_rc_mirror 镜像死代码已删除**（遥控器通道撤下后无用，调试器直接看 rc_ctrl）；级联整定口诀：内环看 ch3 追 ch2（调 spd），外环看 ch1 追 ch0（调 ang）。用户确认未拖滑条，宏值=板内生效值，全部定稿。
 - **摩擦轮 PID 已定稿**（2026-10-05 VOFA 整定）：Kp=12、Ki=0.5、Kd=0，max_out=10000/max_iout=5000，已写回 shoot.h 宏。调试模式 FRIC_POWERON_AUTO 已关（=0），全部调试代码（恒置 READY_FRIC/摇杆满映射±9000rpm/单轮驱动 ID1/FRIC_DEBUG_SPEED_MAX）保留在 #if 内随时可恢复。恢复正常遥控射击：右拨杆(SHOOT_RC_MODE_CHANNEL=1) 上=开摩擦轮(斜坡4500)/下=发弹(单发→保持连发)/中=键盘鼠标模式(Q/E开关轮,鼠标发弹长按连发)；发弹机构=拨弹轮(trigger M2006,角度环单发转0.314rad)+弹仓微动开关(BUTTEN_TRIG_PIN)做待发检测；热量/云台无力保护恢复生效。C620 speed_rpm 是转子转速，M3508 极限≈9254rpm。
 - shoot.c:71 shoot_control 非 static 全局，vofa_task.c extern 直绑，shoot.c 零接口改动。
 - usb_task 已禁用；remote_control.c 有 SBUS_FORWARD_TO_USART1 宏（默认0）释放 TX。
