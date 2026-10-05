@@ -400,9 +400,16 @@ void gimbal_task(void const *pvParameters)
   */
 void set_cali_gimbal_hook(const uint16_t yaw_offset, const uint16_t pitch_offset, const fp32 max_yaw, const fp32 min_yaw, const fp32 max_pitch, const fp32 min_pitch)
 {
+#if YAW_SLIP_RING
+    //电滑环: yaw 中值/限位使用固定配置(YAW_OFFSET_ECD/±π), 不采用校准数据(滑环无堵转, 校准 yaw 数据无效)
+    gimbal_control.gimbal_yaw_motor.offset_ecd = YAW_OFFSET_ECD;
+    gimbal_control.gimbal_yaw_motor.max_relative_angle = 3.141593f;
+    gimbal_control.gimbal_yaw_motor.min_relative_angle = -3.141593f;
+#else
     gimbal_control.gimbal_yaw_motor.offset_ecd = yaw_offset;
     gimbal_control.gimbal_yaw_motor.max_relative_angle = max_yaw;
     gimbal_control.gimbal_yaw_motor.min_relative_angle = min_yaw;
+#endif
 
     gimbal_control.gimbal_pitch_motor.offset_ecd = pitch_offset;
     gimbal_control.gimbal_pitch_motor.max_relative_angle = max_pitch;
@@ -661,6 +668,13 @@ static void gimbal_init(gimbal_control_t *init)
     gimbal_PID_init(&init->gimbal_pitch_motor.gimbal_motor_relative_angle_pid, PITCH_ENCODE_RELATIVE_PID_MAX_OUT, PITCH_ENCODE_RELATIVE_PID_MAX_IOUT, PITCH_ENCODE_RELATIVE_PID_KP, PITCH_ENCODE_RELATIVE_PID_KI, PITCH_ENCODE_RELATIVE_PID_KD);
     PID_init(&init->gimbal_pitch_motor.gimbal_motor_gyro_pid, PID_POSITION, Pitch_speed_pid, PITCH_SPEED_PID_MAX_OUT, PITCH_SPEED_PID_MAX_IOUT);
 
+#if YAW_SLIP_RING
+    //电滑环 yaw: 固定中值与全域限位(不依赖云台校准), INIT 回中=转向 YAW_OFFSET_ECD 朝向
+    init->gimbal_yaw_motor.offset_ecd = YAW_OFFSET_ECD;
+    init->gimbal_yaw_motor.max_relative_angle = 3.141593f;
+    init->gimbal_yaw_motor.min_relative_angle = -3.141593f;
+#endif
+
     //清除所有PID
     gimbal_total_pid_clear(init);
 
@@ -887,6 +901,14 @@ static void gimbal_absolute_angle_limit(gimbal_motor_t *gimbal_motor, fp32 add)
     {
         return;
     }
+#if YAW_SLIP_RING
+    //电滑环 yaw 无限位: 跳过相对角钳位(±π 环绕处该公式会误判卡住), pitch 照常钳位
+    if (gimbal_motor == &gimbal_control.gimbal_yaw_motor)
+    {
+        gimbal_motor->absolute_angle_set = rad_format(gimbal_motor->absolute_angle_set + add);
+        return;
+    }
+#endif
     //now angle error
     //当前控制误差角度
     bias_angle = rad_format(gimbal_motor->absolute_angle_set - gimbal_motor->absolute_angle);

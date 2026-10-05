@@ -103,7 +103,7 @@
 
 
 #define YAW_RC_SEN    -0.000005f
-#define PITCH_RC_SEN  -0.000006f //0.005
+#define PITCH_RC_SEN  0.000006f //2026-10-05 IMU 轴修正后翻正: 推杆向上=抬头 //0.005
 
 #define YAW_MOUSE_SEN   0.00005f
 #define PITCH_MOUSE_SEN 0.00015f
@@ -119,6 +119,11 @@
 
 #define PITCH_TURN  1
 #define YAW_TURN    0
+
+//yaw 电滑环配置(2026-10-05): 电滑环可无限旋转, 无线缆堵转, yaw 不做软限位/不参与云台校准
+#define YAW_SLIP_RING   1
+//电滑环 yaw 的"正前方"中值编码器值(用户实测指定), 上电 INIT 回中即转向该朝向
+#define YAW_OFFSET_ECD  5055
 
 //电机码盘值最大以及中值
 #define HALF_ECD_RANGE  4096

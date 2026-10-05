@@ -407,13 +407,60 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 }
 
 //---------------------------- 业务绑定 ----------------------------
-//波形通道顺序(VOFA 里显示为 ch0..N):
-//  ch0 fric0_target(目标转速, 右摇杆映射值)  ch1 fric0_set  ch2 fric0_get(实际转速)  ch3 fric0_out
-//可调参数: fric0_kp / fric0_ki / fric0_kd / fric0_maxout / fric0_maxiout (0号摩擦轮速度环)
-//遥控器通道已撤下(调试时用 IDE 监视器看 rc_ctrl/vofa_rc_mirror 即可), 需要时取消下方注释
+//波形通道顺序(VOFA 里显示为 ch0..N) —— 当前: yaw 串级调参
+//  ch0 yaw_set(角度目标)      ch1 yaw_get(实际角度)
+//  ch2 yaw_gyro_set(角度环输出=速度环目标)  ch3 yaw_gyro(实际角速度)  ch4 yaw_out(速度环输出电压)
+//可调参数: yaw_ang_kp/ki/kd/maxout/maxiout(角度环 gimbal_PID_t)
+//          yaw_spd_kp/ki/kd/maxout/maxiout(速度环 pid_type_def)
+//激励源: 控制云台 yaw 的摇杆(水平通道 rc.ch[2])左右拨一下回中即阶跃; 云台模式拨杆需在上档(陀螺仪模式)
+//注意: yaw 角度在 ±π 环绕, ch0/ch1 波形在 ±3.14 处跳变属正常
 static void vofa_bind(void)
 {
-    /* ---- 遥控器 7 通道(已撤下, 需要时取消注释) ----
+    const gimbal_motor_t *yaw = get_yaw_motor_point();
+    if (yaw != NULL)
+    {
+        //---- 角度环(外环, gimbal_PID_t, 左拨杆上档生效) ----
+        (void)vofa_reg_pid("yaw_ang", (void *)&yaw->gimbal_motor_absolute_angle_pid, VOFA_PID_GIMBAL);
+
+        //---- 速度环(内环, pid_type_def) ----
+        (void)vofa_reg_pid("yaw_spd", (void *)&yaw->gimbal_motor_gyro_pid, VOFA_PID_STD);
+
+        //---- 观测通道 5 条 ----
+        (void)vofa_reg_channel("yaw_set", &yaw->absolute_angle_set);
+        (void)vofa_reg_channel("yaw_get", &yaw->absolute_angle);
+        (void)vofa_reg_channel("yaw_gyro_set", &yaw->motor_gyro_set);
+        (void)vofa_reg_channel("yaw_gyro", &yaw->motor_gyro);
+        (void)vofa_reg_channel("yaw_out", &yaw->current_set);
+    }
+
+    /* ---- pitch 串级(已撤下, 调 pitch 时取消注释并注释上方 yaw 块) ----
+    const gimbal_motor_t *pitch = get_pitch_motor_point();
+    if (pitch != NULL)
+    {
+        //---- 角度环(外环, gimbal_PID_t, 左拨杆上档生效) ----
+        (void)vofa_reg_pid("pitch_ang", (void *)&pitch->gimbal_motor_absolute_angle_pid, VOFA_PID_GIMBAL);
+
+        //---- 速度环(内环, pid_type_def) ----
+        (void)vofa_reg_pid("pitch_spd", (void *)&pitch->gimbal_motor_gyro_pid, VOFA_PID_STD);
+
+        //---- 观测通道 5 条 ----
+        (void)vofa_reg_channel("pitch_set", &pitch->absolute_angle_set);
+        (void)vofa_reg_channel("pitch_get", &pitch->absolute_angle);
+        (void)vofa_reg_channel("pitch_gyro_set", &pitch->motor_gyro_set);
+        (void)vofa_reg_channel("pitch_gyro", &pitch->motor_gyro);
+        (void)vofa_reg_channel("pitch_out", &pitch->current_set);
+    }
+    ---- pitch 注册结束 ---- */
+
+    /* ---- 0号摩擦轮(已撤下, 需要时取消注释; 通道顺序注意与 pitch 冲突需重排) ----
+    (void)vofa_reg_pid("fric0", &shoot_control.fric_motor[0].speed_pid, VOFA_PID_STD);
+    (void)vofa_reg_channel("fric0_target", &shoot_control.fric_speed_set);
+    (void)vofa_reg_channel("fric0_set", &shoot_control.fric_motor[0].speed_pid.set);
+    (void)vofa_reg_channel("fric0_get", &shoot_control.fric_motor[0].speed_pid.fdb);
+    (void)vofa_reg_channel("fric0_out", &shoot_control.fric_motor[0].speed_pid.out);
+    ---- 摩擦轮注册结束 ---- */
+
+    /* ---- 遥控器 7 通道(已撤下, 调试用 IDE 监视器看 rc_ctrl 即可, 需要时取消注释) ----
     (void)vofa_reg_channel("rc_ch0", &vofa_rc_mirror[0]);
     (void)vofa_reg_channel("rc_ch1", &vofa_rc_mirror[1]);
     (void)vofa_reg_channel("rc_ch2", &vofa_rc_mirror[2]);
@@ -422,43 +469,6 @@ static void vofa_bind(void)
     (void)vofa_reg_channel("rc_s0", &vofa_rc_mirror[5]);
     (void)vofa_reg_channel("rc_s1", &vofa_rc_mirror[6]);
     ---- 遥控器通道注册结束 ---- */
-
-    //---- 0号摩擦轮速度环(调试模式: 右摇杆垂直通道直控目标转速, 无斜坡) ----
-    (void)vofa_reg_pid("fric0", &shoot_control.fric_motor[0].speed_pid, VOFA_PID_STD);
-    (void)vofa_reg_channel("fric0_target", &shoot_control.fric_speed_set);               //目标(摇杆映射值, 只读)
-    (void)vofa_reg_channel("fric0_set", &shoot_control.fric_motor[0].speed_pid.set);     //PID 实际输入(乘过转向符号)
-    (void)vofa_reg_channel("fric0_get", &shoot_control.fric_motor[0].speed_pid.fdb);     //实际转速 rpm
-    (void)vofa_reg_channel("fric0_out", &shoot_control.fric_motor[0].speed_pid.out);     //PID 输出电流
-
-    /* ---- 云台 yaw/pitch(暂不输出, 需要时取消注释; 注意遥控器镜像注释号同步) ----
-    const gimbal_motor_t *yaw = get_yaw_motor_point();
-    if (yaw != NULL)
-    {
-        (void)vofa_reg_pid("yaw_ang", (void *)&yaw->gimbal_motor_absolute_angle_pid, VOFA_PID_GIMBAL);
-        (void)vofa_reg_pid("yaw_spd", (void *)&yaw->gimbal_motor_gyro_pid, VOFA_PID_STD);
-
-        (void)vofa_reg_channel("yaw_set", &yaw->absolute_angle_set);
-        (void)vofa_reg_channel("yaw_get", &yaw->absolute_angle);
-        (void)vofa_reg_channel("yaw_gyro", &yaw->motor_gyro);
-        (void)vofa_reg_channel("yaw_cur", &yaw->current_set);
-    }
-
-    const gimbal_motor_t *pitch = get_pitch_motor_point();
-    if (pitch != NULL)
-    {
-        (void)vofa_reg_pid("pitch_ang", (void *)&pitch->gimbal_motor_absolute_angle_pid, VOFA_PID_GIMBAL);
-        (void)vofa_reg_pid("pitch_spd", (void *)&pitch->gimbal_motor_gyro_pid, VOFA_PID_STD);
-
-        (void)vofa_reg_channel("pitch_set", &pitch->absolute_angle_set);
-        (void)vofa_reg_channel("pitch_get", &pitch->absolute_angle);
-        (void)vofa_reg_channel("pitch_gyro", &pitch->motor_gyro);
-        (void)vofa_reg_channel("pitch_cur", &pitch->current_set);
-    }
-
-    (void)vofa_reg_channel("mouse_x", &vofa_rc_mirror[7]);
-    (void)vofa_reg_channel("mouse_y", &vofa_rc_mirror[8]);
-    (void)vofa_reg_channel("key_v", &vofa_rc_mirror[9]);
-    ---- 云台/鼠标键盘注册结束 ---- */
 }
 
 //遥控器整型 -> fp32 镜像刷新

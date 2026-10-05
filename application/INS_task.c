@@ -40,9 +40,12 @@
 
 #define IMU_temp_PWM(pwm)  imu_pwm_set(pwm)                    //pwm给定
 
+//IMU 安装矩阵(2026-10-05 按实测修正): 芯片系 X=前,Y=左,Z=上
+//实测: 左转(yaw正) gyro[2]=+, 抬头(pitch正) gyro[1]=- → body_y=-chipY, body_z=+chipZ
+//body_x=-chipX 为配平行列式(+1, 右手系); accel 与 gyro 共用, accel[2]=+9.8 约定不变
 #define BMI088_BOARD_INSTALL_SPIN_MATRIX    \
-    {0.0f, 1.0f, 0.0f},                     \
-    {-1.0f, 0.0f, 0.0f},                     \
+    {-1.0f, 0.0f, 0.0f},                    \
+    {0.0f, -1.0f, 0.0f},                    \
     {0.0f, 0.0f, 1.0f}                      \
 
 
