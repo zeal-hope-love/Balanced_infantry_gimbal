@@ -38,6 +38,7 @@
 #include "usb_task.h"
 #include "voltage_task.h"
 #include "servo_task.h"
+#include "vofa_task.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -152,8 +153,8 @@ void MX_FREERTOS_Init(void) {
     osThreadDef(cali, calibrate_task, osPriorityNormal, 0, 512);
     calibrate_tast_handle = osThreadCreate(osThread(cali), NULL);
 
-    osThreadDef(ChassisTask, chassis_task, osPriorityAboveNormal, 0, 512);
-    chassisTaskHandle = osThreadCreate(osThread(ChassisTask), NULL);
+    // osThreadDef(ChassisTask, chassis_task, osPriorityAboveNormal, 0, 512);
+    // chassisTaskHandle = osThreadCreate(osThread(ChassisTask), NULL);
 
     osThreadDef(DETECT, detect_task, osPriorityNormal, 0, 256);
     detect_handle = osThreadCreate(osThread(DETECT), NULL);
@@ -168,22 +169,28 @@ void MX_FREERTOS_Init(void) {
     led_RGB_flow_handle = osThreadCreate(osThread(led), NULL);
 
 
-    osThreadDef(OLED, oled_task, osPriorityLow, 0, 256);
-    oled_handle = osThreadCreate(osThread(OLED), NULL);
+    /* 未接OLED，禁用oled_task以释放1KB任务栈（2026-10-04） */
+    // osThreadDef(OLED, oled_task, osPriorityLow, 0, 256);
+    // oled_handle = osThreadCreate(osThread(OLED), NULL);
 
 
     osThreadDef(REFEREE, referee_usart_task, osPriorityNormal, 0, 128);
     referee_usart_task_handle = osThreadCreate(osThread(REFEREE), NULL);
 
 
-    osThreadDef(USBTask, usb_task, osPriorityNormal, 0, 128);
-    usb_task_handle = osThreadCreate(osThread(USBTask), NULL);
+    /* 无串口接收端，禁用usb_task以释放1KB任务栈（2026-10-04） */
+    // osThreadDef(USBTask, usb_task, osPriorityNormal, 0, 256);
+    // usb_task_handle = osThreadCreate(osThread(USBTask), NULL);
 
     osThreadDef(BATTERY_VOLTAGE, battery_voltage_task, osPriorityNormal, 0, 128);
     battery_voltage_handle = osThreadCreate(osThread(BATTERY_VOLTAGE), NULL);
 
     osThreadDef(SERVO, servo_task, osPriorityNormal, 0, 128);
     servo_task_handle = osThreadCreate(osThread(SERVO), NULL);
+
+    //VOFA+ 上位机调参任务: USART1 蓝牙串口波形监看 + 在线调 PID (2026-10-04)
+    osThreadDef(VOFA, vofa_task, osPriorityNormal, 0, 512);
+    (void)osThreadCreate(osThread(VOFA), NULL);
 
 
 

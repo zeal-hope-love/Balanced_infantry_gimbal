@@ -63,6 +63,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/application/shoot.c
     ${CMAKE_CURRENT_SOURCE_DIR}/application/test_task.c
     ${CMAKE_CURRENT_SOURCE_DIR}/application/usb_task.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/application/vofa_task.c
     ${CMAKE_CURRENT_SOURCE_DIR}/application/voltage_task.c
 
     # bsp

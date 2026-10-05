@@ -68,7 +68,9 @@ void test_task(void const * argument)
         //有错误
         if(error)
         {
-            buzzer_warn_error(error_num+1);
+            #if 0   // 调试期间临时关闭蜂鸣报警
+                buzzer_warn_error(error_num+1);
+            #endif
         }
 
         last_error = error;

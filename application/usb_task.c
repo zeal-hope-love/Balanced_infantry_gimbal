@@ -30,7 +30,7 @@
 
 static void usb_printf(const char *fmt,...);
 
-static uint8_t usb_buf[256];
+static uint8_t usb_buf[512];
 static const char status[2][7] = {"OK", "ERROR!"};
 const error_t *error_list_usb_local;
 
@@ -81,15 +81,20 @@ referee usart:%s\r\n\
 
 static void usb_printf(const char *fmt,...)
 {
-    static va_list ap;
+    va_list ap;
     uint16_t len = 0;
 
     va_start(ap, fmt);
 
-    len = vsprintf((char *)usb_buf, fmt, ap);
+    len = vsnprintf((char *)usb_buf, sizeof(usb_buf), fmt, ap);
 
     va_end(ap);
 
+    /* vsnprintf 返回"本应写入的长度"，被截断时会大于缓冲区，需钳位 */
+    if (len >= sizeof(usb_buf))
+    {
+        len = sizeof(usb_buf) - 1;
+    }
 
     CDC_Transmit_FS(usb_buf, len);
 }

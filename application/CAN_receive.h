@@ -24,7 +24,8 @@
 #include "struct_typedef.h"
 
 #define CHASSIS_CAN hcan1
-#define GIMBAL_CAN hcan2
+#define GIMBAL_CAN hcan1
+#define FRIC_CAN hcan1
 
 /* CAN send and receive ID */
 typedef enum
@@ -100,6 +101,13 @@ extern void CAN_cmd_chassis_reset_ID(void);
   * @retval         none
   */
 extern void CAN_cmd_chassis(int16_t motor1, int16_t motor2, int16_t motor3, int16_t motor4);
+
+/**
+  * @brief          send friction wheel motor current (0x201, 0x202) via CAN2 0x200 frame
+  * @param[in]      fric1: (0x201) 3508 fric wheel current, range [-16384,16384]
+  * @param[in]      fric2: (0x202) 3508 fric wheel current, range [-16384,16384]
+  */
+extern void CAN_cmd_fric(int16_t fric1, int16_t fric2);
 
 /**
   * @brief          return the yaw 6020 motor data point

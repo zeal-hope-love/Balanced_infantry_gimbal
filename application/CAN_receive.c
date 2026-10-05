@@ -50,6 +50,8 @@ static CAN_TxHeaderTypeDef  gimbal_tx_message;
 static uint8_t              gimbal_can_send_data[8];
 static CAN_TxHeaderTypeDef  chassis_tx_message;
 static uint8_t              chassis_can_send_data[8];
+static CAN_TxHeaderTypeDef  fric_tx_message;
+static uint8_t              fric_can_send_data[8];
 
 /**
   * @brief          hal CAN fifo call back, receive motor data
@@ -192,6 +194,31 @@ void CAN_cmd_chassis(int16_t motor1, int16_t motor2, int16_t motor3, int16_t mot
     chassis_can_send_data[7] = motor4;
 
     HAL_CAN_AddTxMessage(&CHASSIS_CAN, &chassis_tx_message, chassis_can_send_data, &send_mail_box);
+}
+
+/**
+  * @brief          send friction wheel motor current via CAN2 0x200 frame (0x201, 0x202)
+  * @param[in]      fric1: (0x201) 3508 fric wheel current, range [-16384,16384]
+  * @param[in]      fric2: (0x202) 3508 fric wheel current, range [-16384,16384]
+  * @retval         none
+  */
+void CAN_cmd_fric(int16_t fric1, int16_t fric2)
+{
+    uint32_t send_mail_box;
+    fric_tx_message.StdId = CAN_CHASSIS_ALL_ID;
+    fric_tx_message.IDE = CAN_ID_STD;
+    fric_tx_message.RTR = CAN_RTR_DATA;
+    fric_tx_message.DLC = 0x08;
+    fric_can_send_data[0] = fric1 >> 8;
+    fric_can_send_data[1] = fric1;
+    fric_can_send_data[2] = fric2 >> 8;
+    fric_can_send_data[3] = fric2;
+    fric_can_send_data[4] = 0;
+    fric_can_send_data[5] = 0;
+    fric_can_send_data[6] = 0;
+    fric_can_send_data[7] = 0;
+
+    HAL_CAN_AddTxMessage(&FRIC_CAN, &fric_tx_message, fric_can_send_data, &send_mail_box);
 }
 
 /**

@@ -32,7 +32,21 @@
 
 #define SHOOT_CONTROL_TIME          GIMBAL_CONTROL_TIME
 
-#define SHOOT_FRIC_PWM_ADD_VALUE    100.0f
+//摩擦轮 CAN 电机(M3508+C620, CAN1, 电调ID 1/2) 参数
+#define FRIC_POWERON_AUTO           0        //1:调试模式(上电进调试态, 右摇杆直控转速, 只跑摩擦轮速度环不喂弹) 0:遥控器开关摩擦轮 (2026-10-05 调参完成关闭)
+//调试模式: 右摇杆垂直通道(rc.ch[1])满映射的目标转速上限(转子rpm, M3508极限约9254)
+#define FRIC_DEBUG_SPEED_MAX        9000.0f
+#define FRIC_SPEED_TARGET           4500.0f  //摩擦轮目标转速 rpm(C620反馈为转子转速, 按需调整)
+#define FRIC_SPEED_TARGET_UP        5500.0f  //鼠标右键按下时的加速转速
+#define FRIC_SPEED_RAMP_ADD_VALUE   5000.0f  //目标转速斜坡步进 rpm/s(ramp_calc输入单位为/s, 0.9s升满4500)
+#define FRIC1_TARGET_SIGN           -1.0f    //摩擦轮1目标转速符号, 仅作用于目标(反馈不乘), 转向不对就改成 1.0f
+#define FRIC2_TARGET_SIGN           1.0f     //摩擦轮2目标转速符号, 仅作用于目标(反馈不乘), 转向不对就改成 -1.0f
+//摩擦轮速度环PID
+#define FRIC_SPEED_PID_KP           12.0f
+#define FRIC_SPEED_PID_KI           0.5f     //2026-10-05 VOFA 在线整定定稿(Kp12/Ki0.5 跟随稳)
+#define FRIC_SPEED_PID_KD           0.0f
+#define FRIC_SPEED_PID_MAX_OUT      10000.0f  //电流输出限幅(C620范围±16384)
+#define FRIC_SPEED_PID_MAX_IOUT     5000.0f
 
 //射击摩擦轮激光打开 关闭
 #define SHOOT_ON_KEYBOARD           KEY_PRESSED_OFFSET_Q
@@ -96,16 +110,23 @@ typedef enum
     SHOOT_DONE,
 } shoot_mode_e;
 
+//摩擦轮 CAN 电机(M3508+C620) 整合结构体
+typedef struct
+{
+    pid_type_def speed_pid;             //速度环PID
+    const motor_measure_t *measure;     //电机反馈指针(0x201/0x202), 转速直接读 measure->speed_rpm
+    fp32 target_sign;                   //转向符号(+1.0f/-1.0f, 适配镜像安装)
+    int16_t current;                    //电流输出指令(区别于 measure->given_current 反馈)
+} fric_motor_t;
 
 typedef struct
 {
     shoot_mode_e shoot_mode;
     const RC_ctrl_t *shoot_rc;
     const motor_measure_t *shoot_motor_measure;
-    ramp_function_source_t fric1_ramp;
-    uint16_t fric_pwm1;
-    ramp_function_source_t fric2_ramp;
-    uint16_t fric_pwm2;
+    ramp_function_source_t fric_speed_ramp;             //摩擦轮目标转速斜坡(两轮共用)
+    fric_motor_t fric_motor[2];                         //摩擦轮1/2(0x201/0x202)
+    fp32 fric_speed_set;                                //摩擦轮目标转速
     pid_type_def trigger_motor_pid;
     fp32 trigger_speed_set;
     fp32 speed;

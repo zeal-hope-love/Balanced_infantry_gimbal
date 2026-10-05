@@ -295,9 +295,11 @@ static void detect_init(uint32_t time)
         error_list[i].work_time = time;
     }
 
-    error_list[OLED_TOE].data_is_error_fun = NULL;
-    error_list[OLED_TOE].solve_lost_fun = OLED_com_reset;
-    error_list[OLED_TOE].solve_data_error_fun = NULL;
+    /* 未接OLED且oled_task已禁用，OLED_TOE不再使能，避免误报ERROR并周期复位I2C2（2026-10-04） */
+    // error_list[OLED_TOE].data_is_error_fun = NULL;
+    // error_list[OLED_TOE].solve_lost_fun = OLED_com_reset;
+    // error_list[OLED_TOE].solve_data_error_fun = NULL;
+    error_list[OLED_TOE].enable = 0;
 
 //    error_list[DBUSTOE].dataIsErrorFun = RC_data_is_error;
 //    error_list[DBUSTOE].solveLostFun = slove_RC_lost;

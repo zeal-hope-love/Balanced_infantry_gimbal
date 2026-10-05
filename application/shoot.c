@@ -31,10 +31,6 @@
 #include "detect_task.h"
 #include "pid.h"
 
-#define shoot_fric1_on(pwm) fric1_on((pwm)) //摩擦轮1pwm宏定义
-#define shoot_fric2_on(pwm) fric2_on((pwm)) //摩擦轮2pwm宏定义
-#define shoot_fric_off()    fric_off()      //关闭两个摩擦轮
-
 #define shoot_laser_on()    laser_on()      //激光开启宏定义
 #define shoot_laser_off()   laser_off()     //激光关闭宏定义
 //微动开关IO
@@ -84,19 +80,36 @@ void shoot_init(void)
 {
 
     static const fp32 Trigger_speed_pid[3] = {TRIGGER_ANGLE_PID_KP, TRIGGER_ANGLE_PID_KI, TRIGGER_ANGLE_PID_KD};
+    static const fp32 Fric_speed_pid[3] = {FRIC_SPEED_PID_KP, FRIC_SPEED_PID_KI, FRIC_SPEED_PID_KD};
+    static const fp32 Fric_sign[2] = {FRIC1_TARGET_SIGN, FRIC2_TARGET_SIGN};
+    uint8_t i;
+#if FRIC_POWERON_AUTO
+    shoot_control.shoot_mode = SHOOT_READY_FRIC; //测试: 上电自动缓升摩擦轮
+#else
     shoot_control.shoot_mode = SHOOT_STOP;
+#endif
     //遥控器指针
     shoot_control.shoot_rc = get_remote_control_point();
     //电机指针
     shoot_control.shoot_motor_measure = get_trigger_motor_measure_point();
     //初始化PID
     PID_init(&shoot_control.trigger_motor_pid, PID_POSITION, Trigger_speed_pid, TRIGGER_READY_PID_MAX_OUT, TRIGGER_READY_PID_MAX_IOUT);
+    //摩擦轮(CAN1 0x201/0x202): 反馈指针/速度环PID/转向符号
+    for (i = 0; i < 2; i++)
+    {
+        shoot_control.fric_motor[i].measure = get_chassis_motor_measure_point(i);
+        PID_init(&shoot_control.fric_motor[i].speed_pid, PID_POSITION, Fric_speed_pid,
+                 FRIC_SPEED_PID_MAX_OUT, FRIC_SPEED_PID_MAX_IOUT);
+        shoot_control.fric_motor[i].target_sign = Fric_sign[i];
+        shoot_control.fric_motor[i].current = 0;
+    }
     //更新数据
     shoot_feedback_update();
-    ramp_init(&shoot_control.fric1_ramp, SHOOT_CONTROL_TIME * 0.001f, FRIC_DOWN, FRIC_OFF);
-    ramp_init(&shoot_control.fric2_ramp, SHOOT_CONTROL_TIME * 0.001f, FRIC_DOWN, FRIC_OFF);
-    shoot_control.fric_pwm1 = FRIC_OFF;
-    shoot_control.fric_pwm2 = FRIC_OFF;
+    //摩擦轮目标转速斜坡: 0 -> FRIC_SPEED_TARGET
+    ramp_init(&shoot_control.fric_speed_ramp, SHOOT_CONTROL_TIME * 0.001f, FRIC_SPEED_TARGET, 0.0f);
+    shoot_control.fric_speed_set = 0.0f;
+    //确保 PWM 摩擦轮引脚拉低(已迁移为 CAN 控制)
+    fric_off();
     shoot_control.ecd_count = 0;
     shoot_control.angle = shoot_control.shoot_motor_measure->ecd * MOTOR_ECD_TO_ANGLE;
     shoot_control.given_current = 0;
@@ -114,7 +127,9 @@ void shoot_init(void)
   */
 int16_t shoot_control_loop(void)
 {
-
+#if !FRIC_POWERON_AUTO
+    uint8_t i; //调试模式只驱动单轮, 循环变量仅在正常模式使用
+#endif
     shoot_set_mode();        //设置状态机
     shoot_feedback_update(); //更新数据
 
@@ -171,9 +186,8 @@ int16_t shoot_control_loop(void)
     {
         shoot_laser_off();
         shoot_control.given_current = 0;
-        //摩擦轮需要一个个斜波开启，不能同时直接开启，否则可能电机不转
-        ramp_calc(&shoot_control.fric1_ramp, -SHOOT_FRIC_PWM_ADD_VALUE);
-        ramp_calc(&shoot_control.fric2_ramp, -SHOOT_FRIC_PWM_ADD_VALUE);
+        //摩擦轮目标转速缓坡下降(闭环降速, 无电流突跳)
+        ramp_calc(&shoot_control.fric_speed_ramp, -FRIC_SPEED_RAMP_ADD_VALUE);
     }
     else
     {
@@ -185,16 +199,35 @@ int16_t shoot_control_loop(void)
         {
             shoot_control.given_current = 0;
         }
-        //摩擦轮需要一个个斜波开启，不能同时直接开启，否则可能电机不转
-        ramp_calc(&shoot_control.fric1_ramp, SHOOT_FRIC_PWM_ADD_VALUE);
-        ramp_calc(&shoot_control.fric2_ramp, SHOOT_FRIC_PWM_ADD_VALUE);
-
+        //摩擦轮目标转速缓坡上升
+        ramp_calc(&shoot_control.fric_speed_ramp, FRIC_SPEED_RAMP_ADD_VALUE);
     }
 
-    shoot_control.fric_pwm1 = (uint16_t)(shoot_control.fric1_ramp.out);
-    shoot_control.fric_pwm2 = (uint16_t)(shoot_control.fric2_ramp.out);
-    shoot_fric1_on(shoot_control.fric_pwm1);
-    shoot_fric2_on(shoot_control.fric_pwm2);
+    //摩擦轮速度环: 仅目标转速乘转向符号适配镜像安装方向, 反馈直接用 speed_rpm
+    //(目标和反馈同乘符号会把误差翻转成正反馈, 导致转速飞到机械极限)
+    shoot_control.fric_speed_set = shoot_control.fric_speed_ramp.out;
+#if FRIC_POWERON_AUTO
+    //调试模式: 右摇杆垂直通道(rc.ch[1], -660~660)满映射为目标转速(-9000~9000rpm),
+    //上推正转/下推反转/回中0, 无斜坡; 越过斜坡输出, 摇杆位置即阶跃激励
+    shoot_control.fric_speed_set = (fp32)shoot_control.shoot_rc->rc.ch[1]
+                                   * (FRIC_DEBUG_SPEED_MAX / 660.0f);
+
+    //调试: 只驱动 0 号轮(电调ID1, 与VOFA fric0_*绑定一致), 1 号轮(ID2)电流置0
+    shoot_control.fric_motor[0].current = (int16_t)PID_calc(&shoot_control.fric_motor[0].speed_pid,
+            (fp32)shoot_control.fric_motor[0].measure->speed_rpm,
+            shoot_control.fric_motor[0].target_sign * shoot_control.fric_speed_set);
+    shoot_control.fric_motor[1].current = 0;
+#else
+    for (i = 0; i < 2; i++)
+    {
+        shoot_control.fric_motor[i].current = (int16_t)PID_calc(&shoot_control.fric_motor[i].speed_pid,
+                (fp32)shoot_control.fric_motor[i].measure->speed_rpm,
+                shoot_control.fric_motor[i].target_sign * shoot_control.fric_speed_set);
+    }
+#endif
+    //0x200 帧走 CAN1, 控制 0x201/0x202 摩擦轮电调
+    CAN_cmd_fric(shoot_control.fric_motor[0].current, shoot_control.fric_motor[1].current);
+
     return shoot_control.given_current;
 }
 
@@ -207,6 +240,13 @@ static void shoot_set_mode(void)
 {
     static int8_t last_s = RC_SW_UP;
 
+#if FRIC_POWERON_AUTO
+    //调试模式: 恒为升轮态, 只跑摩擦轮速度环(目标=右摇杆直控), 永不进拨弹/发射逻辑;
+    //拨杆/键盘对状态机全部失效
+    shoot_control.shoot_mode = SHOOT_READY_FRIC;
+#endif
+
+#if !FRIC_POWERON_AUTO
     //上拨判断， 一次开启，再次关闭
     if ((switch_is_up(shoot_control.shoot_rc->rc.s[SHOOT_RC_MODE_CHANNEL]) && !switch_is_up(last_s) && shoot_control.shoot_mode == SHOOT_STOP))
     {
@@ -227,12 +267,16 @@ static void shoot_set_mode(void)
     {
         shoot_control.shoot_mode = SHOOT_STOP;
     }
+#endif
 
-    if(shoot_control.shoot_mode == SHOOT_READY_FRIC && shoot_control.fric1_ramp.out == shoot_control.fric1_ramp.max_value && shoot_control.fric2_ramp.out == shoot_control.fric2_ramp.max_value)
+#if !FRIC_POWERON_AUTO
+    if(shoot_control.shoot_mode == SHOOT_READY_FRIC && shoot_control.fric_speed_ramp.out == shoot_control.fric_speed_ramp.max_value)
     {
         shoot_control.shoot_mode = SHOOT_READY_BULLET;
     }
-    else if(shoot_control.shoot_mode == SHOOT_READY_BULLET && shoot_control.key == SWITCH_TRIGGER_ON)
+    else
+#endif
+    if(shoot_control.shoot_mode == SHOOT_READY_BULLET && shoot_control.key == SWITCH_TRIGGER_ON)
     {
         shoot_control.shoot_mode = SHOOT_READY;
     }
@@ -290,10 +334,13 @@ static void shoot_set_mode(void)
         }
     }
     //如果云台状态是 无力状态，就关闭射击
+    //(测试模式下跳过: 遥控器离线时云台恒为 ZERO_FORCE, 否则摩擦轮永远无法自动启动)
+#if !FRIC_POWERON_AUTO
     if (gimbal_cmd_to_shoot_stop())
     {
         shoot_control.shoot_mode = SHOOT_STOP;
     }
+#endif
 
     last_s = shoot_control.shoot_rc->rc.s[SHOOT_RC_MODE_CHANNEL];
 }
@@ -317,6 +364,8 @@ static void shoot_feedback_update(void)
     speed_fliter_2 = speed_fliter_3;
     speed_fliter_3 = speed_fliter_2 * fliter_num[0] + speed_fliter_1 * fliter_num[1] + (shoot_control.shoot_motor_measure->speed_rpm * MOTOR_RPM_TO_SPEED) * fliter_num[2];
     shoot_control.speed = speed_fliter_3;
+
+    //摩擦轮转速反馈直接由 measure->speed_rpm 提供(CAN1 0x201/0x202), 无需二次拷贝
 
     //电机圈数重置， 因为输出轴旋转一圈， 电机轴旋转 36圈，将电机轴数据处理成输出轴数据，用于控制输出轴角度
     if (shoot_control.shoot_motor_measure->ecd - shoot_control.shoot_motor_measure->last_ecd > HALF_ECD_RANGE)
@@ -394,14 +443,12 @@ static void shoot_feedback_update(void)
 
     if (up_time > 0)
     {
-        shoot_control.fric1_ramp.max_value = FRIC_UP;
-        shoot_control.fric2_ramp.max_value = FRIC_UP;
+        shoot_control.fric_speed_ramp.max_value = FRIC_SPEED_TARGET_UP;
         up_time--;
     }
     else
     {
-        shoot_control.fric1_ramp.max_value = FRIC_DOWN;
-        shoot_control.fric2_ramp.max_value = FRIC_DOWN;
+        shoot_control.fric_speed_ramp.max_value = FRIC_SPEED_TARGET;
     }
 
 

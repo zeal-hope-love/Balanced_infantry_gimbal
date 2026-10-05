@@ -32,6 +32,10 @@
 //遥控器出错数据上限
 #define RC_CHANNAL_ERROR_VALUE 700
 
+//1: 把 DBUS 收到的遥控帧从 USART1 转发出去(接图传/其他板子时用)
+//0: USART1 TX 让给 VOFA+ 调参模块发送波形 (2026-10-04)
+#define SBUS_FORWARD_TO_USART1  0u
+
 extern UART_HandleTypeDef huart3;
 extern DMA_HandleTypeDef hdma_usart3_rx;
 
@@ -186,7 +190,9 @@ void USART3_IRQHandler(void)
                 sbus_to_rc(sbus_rx_buf[0], &rc_ctrl);
                 //记录数据接收时间
                 detect_hook(DBUS_TOE);
+#if SBUS_FORWARD_TO_USART1
                 sbus_to_usart1(sbus_rx_buf[0]);
+#endif
             }
         }
         else
@@ -218,7 +224,9 @@ void USART3_IRQHandler(void)
                 sbus_to_rc(sbus_rx_buf[1], &rc_ctrl);
                 //记录数据接收时间
                 detect_hook(DBUS_TOE);
+#if SBUS_FORWARD_TO_USART1
                 sbus_to_usart1(sbus_rx_buf[1]);
+#endif
             }
         }
     }

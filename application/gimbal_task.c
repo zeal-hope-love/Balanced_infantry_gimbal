@@ -326,11 +326,11 @@ void gimbal_task(void const *pvParameters)
     shoot_init();
     //wait for all motor online
     //判断电机是否都上线
-    while (toe_is_error(YAW_GIMBAL_MOTOR_TOE) || toe_is_error(PITCH_GIMBAL_MOTOR_TOE))
-    {
-        vTaskDelay(GIMBAL_CONTROL_TIME);
-        gimbal_feedback_update(&gimbal_control);             //云台数据反馈
-    }
+    // while (toe_is_error(YAW_GIMBAL_MOTOR_TOE) || toe_is_error(PITCH_GIMBAL_MOTOR_TOE))
+    // {
+    //     vTaskDelay(GIMBAL_CONTROL_TIME);
+    //     gimbal_feedback_update(&gimbal_control);             //云台数据反馈
+    // }
 
     while (1)
     {
