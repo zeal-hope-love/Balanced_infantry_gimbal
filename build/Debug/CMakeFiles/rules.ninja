@@ -6,7 +6,7 @@
 # It is included in the main 'build.ninja'.
 
 # =============================================================================
-# Project: standard_robot
+# Project: Balanced_infantry_gimbal
 # Configurations: Debug
 # =============================================================================
 # =============================================================================
@@ -14,7 +14,7 @@
 #############################################
 # Rule for compiling ASM files.
 
-rule ASM_COMPILER__standard_robot_unscanned_Debug
+rule ASM_COMPILER__Balanced_infantry_gimbal_unscanned_Debug
   depfile = $DEP_FILE
   deps = gcc
   command = ${LAUNCHER}${CODE_CHECK}C:\Users\PoXia\AppData\Local\stm32cube\bundles\gnu-tools-for-stm32\14.3.1+st.2\bin\arm-none-eabi-gcc.exe $DEFINES $INCLUDES $FLAGS -MD -MT $out -MF $DEP_FILE -o $out -c $in
@@ -24,7 +24,7 @@ rule ASM_COMPILER__standard_robot_unscanned_Debug
 #############################################
 # Rule for compiling C files.
 
-rule C_COMPILER__standard_robot_unscanned_Debug
+rule C_COMPILER__Balanced_infantry_gimbal_unscanned_Debug
   depfile = $DEP_FILE
   deps = gcc
   command = ${LAUNCHER}${CODE_CHECK}C:\Users\PoXia\AppData\Local\stm32cube\bundles\gnu-tools-for-stm32\14.3.1+st.2\bin\arm-none-eabi-gcc.exe $DEFINES $INCLUDES $FLAGS -MD -MT $out -MF $DEP_FILE -o $out -c $in
@@ -34,7 +34,7 @@ rule C_COMPILER__standard_robot_unscanned_Debug
 #############################################
 # Rule for linking C executable.
 
-rule C_EXECUTABLE_LINKER__standard_robot_Debug
+rule C_EXECUTABLE_LINKER__Balanced_infantry_gimbal_Debug
   command = C:\WINDOWS\system32\cmd.exe /C "$PRE_LINK && C:\Users\PoXia\AppData\Local\stm32cube\bundles\gnu-tools-for-stm32\14.3.1+st.2\bin\arm-none-eabi-gcc.exe $FLAGS $LINK_FLAGS @$RSP_FILE -o $TARGET_FILE && $POST_BUILD"
   description = Linking C executable $TARGET_FILE
   rspfile = $RSP_FILE
@@ -84,7 +84,7 @@ rule C_COMPILER__FreeRTOS_unscanned_Debug
 # Rule for re-running cmake.
 
 rule RERUN_CMAKE
-  command = C:\Users\PoXia\AppData\Local\stm32cube\bundles\cmake\4.3.1+st.1\bin\cmake.exe --regenerate-during-build -SC:\Users\PoXia\Desktop\RM\测试工程\gimbal_20.standard_robot_vscode -BC:\Users\PoXia\Desktop\RM\测试工程\gimbal_20.standard_robot_vscode\build\Debug
+  command = C:\Users\PoXia\AppData\Local\stm32cube\bundles\cmake\4.3.1+st.1\bin\cmake.exe --regenerate-during-build -SC:\Users\PoXia\Desktop\RM\测试工程\Balanced_infantry_gimbal -BC:\Users\PoXia\Desktop\RM\测试工程\Balanced_infantry_gimbal\build\Debug
   description = Re-running CMake...
   generator = 1
 
